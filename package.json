@@ -1,0 +1,10 @@
+{
+  "name": "yew-bulma-search-select",
+  "version": "0.1.0",
+  "description": "Styles for the yew-bulma-search-select Rust crate",
+  "author": {
+    "name": "Elliott Clarke",
+    "email": "ecclarke42@gmail.com"
+  },
+  "license": "ISC"
+}

@@ -1,0 +1,43 @@
+.ybss-multiple-input-wrapper {
+  //   flex: 1 0 auto;
+  //   width: auto;
+
+  padding: 0;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+  color: #363636;
+  box-shadow: none;
+
+  display: flex;
+  flex-flow: row wrap;
+  align-content: flex-start;
+  justify-content: flex-start;
+  align-items: center;
+
+  font-size: 1rem;
+  line-height: 1.5;
+  vertical-align: top;
+
+  height: fit-content;
+}
+
+.ybss-multiple-input-wrapper .is-active {
+  border-color: #3273dc;
+  box-shadow: 0 0 0 0.125em rgba(50, 115, 220, 25%);
+}
+
+.ybss-multiple-input-wrapper .input {
+  border-color: transparent;
+  box-shadow: none;
+  display: inline-block;
+  flex: 1 0 auto;
+  width: auto;
+
+  // margin-top: -2px;
+  // border: none;
+}
+
+.ybss-multiple-input-wrapper .tag {
+  margin: 0.25rem;
+  font-size: 1rem;
+}

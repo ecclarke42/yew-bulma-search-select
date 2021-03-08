@@ -1,0 +1,13 @@
+[package]
+name = "yew-bulma-search-select"
+version = "0.1.0"
+authors = ["Elliott Clarke <elliott.clarke.ext@siemens-energy.com>"]
+edition = "2018"
+
+[dependencies]
+futures = "*"
+yew = { git = "https://github.com/yewstack/yew/" } # TODO: pin version
+yewtil = { git = "https://github.com/yewstack/yew/" }
+
+[workspace]
+members = ["examples/*"]
