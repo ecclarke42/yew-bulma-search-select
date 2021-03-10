@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::sync::Arc;
 use yew::prelude::*;
 use yewtil::future::LinkFuture;
 
@@ -7,17 +7,19 @@ pub use selection::Selection;
 
 pub type SelectOptions<T> = Arc<selection::SelectState<T>>;
 pub type SelectFilter<T> = Arc<dyn Fn(&T, &str) -> bool>;
+pub type SelectDisplay<T> = Arc<dyn Fn(&T) -> String>;
 
 pub fn filter<T, F: Fn(&T, &str) -> bool + 'static>(f: F) -> SelectFilter<T> {
     Arc::new(f) as SelectFilter<T>
 }
 
+pub fn display<T, F: Fn(&T) -> String + 'static>(f: F) -> SelectDisplay<T> {
+    Arc::new(f) as SelectDisplay<T>
+}
+
 /// Bulma-based selection box
 /// TODO: document
-pub struct Select<T>
-where
-    T: Clone + PartialEq + Display + 'static,
-{
+pub struct Select<T: 'static> {
     link: ComponentLink<Self>,
     props: SelectProps<T>,
 
@@ -26,18 +28,24 @@ where
     search_text: String,
 }
 
-#[derive(Properties, Clone)]
-pub struct SelectProps<T>
-where
-    T: Clone + PartialEq + 'static,
-{
+#[derive(Properties)]
+pub struct SelectProps<T> {
     /// Omit selected items from the dropdown list (if false, selected will be
     /// highlighted).
     #[prop_or_default]
     pub omit_selected: bool,
 
+    /// Control whether to show the selected items as tags in the input field
+    /// (if in multiple mode). Useful to turn off if you want to control display
+    /// of the selected items outside of the field.
+    ///
+    /// This does nothing in single selection mode.
+    #[prop_or(true)]
+    pub display_selected: bool,
+
     pub options: SelectOptions<T>,
-    pub filter: Arc<dyn Fn(&T, &str) -> bool>,
+    pub filter: SelectFilter<T>,
+    pub display: SelectDisplay<T>,
 
     #[prop_or_default]
     pub onselected: Option<Callback<usize>>,
@@ -46,12 +54,34 @@ where
 
     #[prop_or_else(|| String::from("Type to search"))]
     pub placeholder: String,
+    #[prop_or_default]
+    pub disabled: bool, // TODO
+    #[prop_or_default]
+    pub loading: bool, // TODO
 }
 
-impl<T> PartialEq for SelectProps<T>
-where
-    T: Clone + PartialEq + 'static,
-{
+// This SHOULD be the auto impl, but for some reason that thinks that T needs to be Clone
+impl<T> Clone for SelectProps<T> {
+    fn clone(&self) -> Self {
+        Self {
+            omit_selected: self.omit_selected,
+            display_selected: self.display_selected,
+
+            options: self.options.clone(),
+            filter: self.filter.clone(),
+            display: self.display.clone(),
+
+            onselected: self.onselected.clone(),
+            onremoved: self.onremoved.clone(),
+
+            placeholder: self.placeholder.clone(),
+            disabled: self.disabled,
+            loading: self.loading,
+        }
+    }
+}
+
+impl<T> PartialEq for SelectProps<T> {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.options, &other.options)
             // && Arc::ptr_eq(&self.filter, &other.filter) // TODO: don't ignore filter changes?
@@ -78,10 +108,7 @@ pub enum Msg {
     KeyPress(KeyboardEvent),
 }
 
-impl<T> Component for Select<T>
-where
-    T: Clone + PartialEq + Display + 'static,
-{
+impl<T: 'static> Component for Select<T> {
     type Properties = SelectProps<T>;
     type Message = Msg;
 
@@ -179,6 +206,13 @@ where
                     false
                 }
 
+                "Escape" => {
+                    self.focused = false;
+                    self.selection_index = 0;
+                    self.search_text.clear();
+                    true
+                }
+
                 "ArrowUp" => {
                     self.focused = true;
                     let event: &Event = &event;
@@ -201,24 +235,6 @@ where
     }
 
     fn view(&self) -> Html {
-        // let filtered_items = if let Ok(items) = self.props.options.inner.read() {
-        //     match self.filtered_indices {
-        //         FilteredOptions::All => items.iter().cloned().enumerate().collect(),
-        //         FilteredOptions::Some(ref indices) => {
-        //             let mut filtered = Vec::with_capacity(indices.len());
-        //             for index in indices.iter() {
-        //                 if let Some(item) = items.get(*index) {
-        //                     filtered.push((*index, item.clone()))
-        //                 }
-        //             }
-        //             filtered
-        //         }
-        //         FilteredOptions::None => Vec::new(),
-        //     }
-        // } else {
-        //     Vec::new()
-        // };
-
         let options = if self.props.omit_selected {
             self.props
                 .options
@@ -263,7 +279,7 @@ where
                                     Msg::Selected(idx)
                                 })
                             >
-                                {item.to_string()}
+                                { (self.props.display)(&item) }
                             </p>
                         </a>
                     }
@@ -292,10 +308,7 @@ where
     }
 }
 
-impl<T> Select<T>
-where
-    T: Clone + PartialEq + Display + 'static,
-{
+impl<T> Select<T> {
     fn view_single(&self) -> Html {
         if self.focused {
             html! {
@@ -304,7 +317,7 @@ where
                         class="input"
                         type="text"
                         value=&self.search_text
-                        placeholder=self.props.options.selected_items().first().map(|(_, x)| x.to_string()).unwrap_or_else(|| self.props.placeholder.clone())
+                        placeholder=self.props.options.selected_items().first().map(|(_, x)| (self.props.display)(x)).unwrap_or_else(|| self.props.placeholder.clone())
                         oninput=self.link.callback(|event: InputData| Msg::Input(event.value))
                         onfocus=self.link.callback(|_| Msg::Focus)
                         onblur=self.link.callback(|_| Msg::Blur)
@@ -327,7 +340,7 @@ where
                     <input
                         class="input"
                         type="text"
-                        value=self.props.options.selected_items().first().map(|(_, x)| x.to_string()).unwrap_or_default()
+                        value=self.props.options.selected_items().first().map(|(_, x)| (self.props.display)(x)).unwrap_or_default()
                         oninput=self.link.callback(|data: InputData| {
                             // Don't allow input when not focused
                             let event: &Event = &data.event;
@@ -351,12 +364,16 @@ where
         html! {
             <div class=classes!("input", "ybss-multiple-input-wrapper", if self.focused {"is-active"} else {""})>
                 {
-                    for self.props.options.selected_items().into_iter().map(|(i, item)| html! {
-                        <span class="tag">
-                            {item.to_string()}
-                            <div class="delete is-small" onclick=self.link.callback(move |_| Msg::Removed(i)) />
-                        </span>
-                    })
+                    if self.props.display_selected {
+                        self.props.options.selected_items().into_iter().map(|(i, item)| html! {
+                            <span class="tag">
+                                { (self.props.display)(&item) }
+                                <div class="delete is-small" onclick=self.link.callback(move |_| Msg::Removed(i)) />
+                            </span>
+                        }).collect::<Html>()
+                    } else {
+                        html! {}
+                    }
                 }
                 <input
                     class="input"

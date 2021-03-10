@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeSet,
-    fmt::Display,
     sync::{Arc, RwLock},
 };
 
@@ -183,10 +182,7 @@ pub struct SelectState<T> {
     pub(crate) filtered_indices: RwLock<Filtered>,
 }
 
-impl<T> SelectState<T>
-where
-    T: Display,
-{
+impl<T> SelectState<T> {
     pub fn is_multiple(&self) -> bool {
         if let Ok(inner) = self.selected_indices.read() {
             inner.is_multiple()
@@ -203,6 +199,14 @@ where
             // TODO: handle lock error?
             false
         }
+    }
+
+    // Expose the internal api of the options vec
+    pub fn get(&self, index: usize) -> Option<Arc<T>> {
+        self.options.get(index).cloned()
+    }
+    pub fn iter(&self) -> std::slice::Iter<Arc<T>> {
+        self.options.iter()
     }
 
     pub fn first_selected(&self) -> Option<(usize, Arc<T>)> {

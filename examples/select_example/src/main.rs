@@ -1,6 +1,8 @@
 use yew::prelude::*;
 
-use yew_bulma_search_select::{filter, Select, SelectFilter, SelectOptions, Selection};
+use yew_bulma_search_select::{
+    display, filter, Select, SelectDisplay, SelectFilter, SelectOptions, Selection,
+};
 
 fn main() {
     yew::start_app::<App>();
@@ -24,6 +26,7 @@ pub struct App {
     link: ComponentLink<Self>,
 
     filter: SelectFilter<Data>,
+    select_display: SelectDisplay<Data>,
 
     a_data: SelectOptions<Data>,
     b_data: SelectOptions<Data>,
@@ -81,6 +84,7 @@ impl Component for App {
                     .find(&search.to_lowercase())
                     .is_some()
             }),
+            select_display: display(|item: &Data| item.to_string()),
             a_data: Selection::one(0).with_options(test_data.clone()),
             b_data: Selection::none().with_options(test_data.clone()),
             c_data: Selection::empty().with_options(test_data),
@@ -113,6 +117,7 @@ impl Component for App {
                         <Select<Data>
                             options=self.a_data.clone()
                             filter=self.filter.clone()
+                            display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedA)
                         />
                     </div>
@@ -123,6 +128,7 @@ impl Component for App {
                         <Select<Data>
                             options=self.b_data.clone()
                             filter=self.filter.clone()
+                            display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedB)
                         />
                     </div>
@@ -133,6 +139,7 @@ impl Component for App {
                         <Select<Data>
                             options=self.c_data.clone()
                             filter=self.filter.clone()
+                            display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedC)
                             onremoved=self.link.callback(Msg::ClearedC)
                         />
@@ -145,6 +152,7 @@ impl Component for App {
                             omit_selected={true}
                             options=self.c_data.clone()
                             filter=self.filter.clone()
+                            display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedC)
                             onremoved=self.link.callback(Msg::ClearedC)
                         />
