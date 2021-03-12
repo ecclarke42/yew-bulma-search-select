@@ -1,8 +1,6 @@
 use yew::prelude::*;
 
-use yew_bulma_search_select::{
-    display, filter, Select, SelectDisplay, SelectFilter, SelectOptions, Selection,
-};
+use yew_bulma_search_select::{Select, SelectDisplay, SelectFilter, SelectOptions, Selection};
 
 fn main() {
     yew::start_app::<App>();
@@ -78,13 +76,13 @@ impl Component for App {
 
         Self {
             link,
-            filter: filter(|item: &Data, search: &str| -> bool {
+            filter: SelectFilter::new(|item: &Data, search: &str| -> bool {
                 item.name
                     .to_lowercase()
                     .find(&search.to_lowercase())
                     .is_some()
             }),
-            select_display: display(|item: &Data| item.to_string()),
+            select_display: SelectDisplay::new(|item: &Data| item.to_string()),
             a_data: Selection::one(0).with_options(test_data.clone()),
             b_data: Selection::none().with_options(test_data.clone()),
             c_data: Selection::empty().with_options(test_data),

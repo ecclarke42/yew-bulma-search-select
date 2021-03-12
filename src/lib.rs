@@ -4,18 +4,10 @@ use yewtil::future::LinkFuture;
 
 mod selection;
 pub use selection::Selection;
+mod wrappers;
+pub use wrappers::{SelectDisplay, SelectFilter};
 
 pub type SelectOptions<T> = Arc<selection::SelectState<T>>;
-pub type SelectFilter<T> = Arc<dyn Fn(&T, &str) -> bool>;
-pub type SelectDisplay<T> = Arc<dyn Fn(&T) -> String>;
-
-pub fn filter<T, F: Fn(&T, &str) -> bool + 'static>(f: F) -> SelectFilter<T> {
-    Arc::new(f) as SelectFilter<T>
-}
-
-pub fn display<T, F: Fn(&T) -> String + 'static>(f: F) -> SelectDisplay<T> {
-    Arc::new(f) as SelectDisplay<T>
-}
 
 /// Bulma-based selection box
 /// TODO: document
@@ -141,13 +133,13 @@ impl<T: 'static> Component for Select<T> {
                 self.focused = true;
                 self.search_text = input.clone();
 
-                let filter_fn = self.props.filter.clone();
+                let filter = self.props.filter.clone();
                 let options = self.props.options.clone();
                 self.link.send_future(async move {
                     if input.is_empty() {
                         options.unfilter().await;
                     } else {
-                        options.filter(|item| (filter_fn)(item, &input)).await;
+                        options.filter(|item| filter.call(item, &input)).await;
                     }
                     Msg::Filtered
                 });
@@ -279,7 +271,7 @@ impl<T: 'static> Component for Select<T> {
                                     Msg::Selected(idx)
                                 })
                             >
-                                { (self.props.display)(&item) }
+                                { self.props.display.call(&item) }
                             </p>
                         </a>
                     }
@@ -317,7 +309,7 @@ impl<T> Select<T> {
                         class="input"
                         type="text"
                         value=&self.search_text
-                        placeholder=self.props.options.selected_items().first().map(|(_, x)| (self.props.display)(x)).unwrap_or_else(|| self.props.placeholder.clone())
+                        placeholder=self.props.options.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_else(|| self.props.placeholder.clone())
                         oninput=self.link.callback(|event: InputData| Msg::Input(event.value))
                         onfocus=self.link.callback(|_| Msg::Focus)
                         onblur=self.link.callback(|_| Msg::Blur)
@@ -340,7 +332,7 @@ impl<T> Select<T> {
                     <input
                         class="input"
                         type="text"
-                        value=self.props.options.selected_items().first().map(|(_, x)| (self.props.display)(x)).unwrap_or_default()
+                        value=self.props.options.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_default()
                         oninput=self.link.callback(|data: InputData| {
                             // Don't allow input when not focused
                             let event: &Event = &data.event;
@@ -367,7 +359,7 @@ impl<T> Select<T> {
                     if self.props.display_selected {
                         self.props.options.selected_items().into_iter().map(|(i, item)| html! {
                             <span class="tag">
-                                { (self.props.display)(&item) }
+                                { self.props.display.call(&item) }
                                 <div class="delete is-small" onclick=self.link.callback(move |_| Msg::Removed(i)) />
                             </span>
                         }).collect::<Html>()
