@@ -47,9 +47,11 @@ pub struct SelectProps<T> {
     #[prop_or_else(|| String::from("Type to search"))]
     pub placeholder: String,
     #[prop_or_default]
-    pub disabled: bool, // TODO
+    pub readonly: bool,
     #[prop_or_default]
-    pub loading: bool, // TODO
+    pub disabled: bool,
+    #[prop_or_default]
+    pub loading: bool,
 }
 
 // This SHOULD be the auto impl, but for some reason that thinks that T needs to be Clone
@@ -67,6 +69,7 @@ impl<T> Clone for SelectProps<T> {
             onremoved: self.onremoved.clone(),
 
             placeholder: self.placeholder.clone(),
+            readonly: self.readonly,
             disabled: self.disabled,
             loading: self.loading,
         }
@@ -75,6 +78,7 @@ impl<T> Clone for SelectProps<T> {
 
 impl<T> PartialEq for SelectProps<T> {
     fn eq(&self, other: &Self) -> bool {
+        self.readonly == other.readonly && self.disabled == other.disabled && self.loading == other.loading &&
         Arc::ptr_eq(&self.options, &other.options)
             // && Arc::ptr_eq(&self.filter, &other.filter) // TODO: don't ignore filter changes?
             && self.omit_selected == other.omit_selected
@@ -116,6 +120,11 @@ impl<T: 'static> Component for Select<T> {
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if self.props != props {
+            if props.disabled {
+                self.focused = false;
+                self.selection_index = 0;
+                self.search_text.clear();
+            }
             self.props = props;
             true
         } else {
@@ -130,6 +139,10 @@ impl<T: 'static> Component for Select<T> {
             Msg::Filtered => true,
 
             Msg::Input(input) => {
+                if self.props.disabled || self.props.readonly {
+                    return false;
+                }
+
                 self.focused = true;
                 self.search_text = input.clone();
 
@@ -178,6 +191,9 @@ impl<T: 'static> Component for Select<T> {
             }
 
             Msg::Focus => {
+                if self.props.disabled || self.props.readonly {
+                    return false;
+                }
                 self.focused = true;
                 true
             }
@@ -189,40 +205,46 @@ impl<T: 'static> Component for Select<T> {
                 true
             }
 
-            Msg::KeyPress(event) => match event.code().as_ref() {
-                "Enter" => {
-                    if let Some((index, _)) = self.props.options.get_filtered(self.selection_index)
-                    {
-                        self.link.send_message(Msg::Selected(index));
+            Msg::KeyPress(event) => {
+                if self.props.disabled || self.props.readonly {
+                    return false;
+                }
+                match event.code().as_ref() {
+                    "Enter" => {
+                        if let Some((index, _)) =
+                            self.props.options.get_filtered(self.selection_index)
+                        {
+                            self.link.send_message(Msg::Selected(index));
+                        }
+                        false
                     }
-                    false
-                }
 
-                "Escape" => {
-                    self.focused = false;
-                    self.selection_index = 0;
-                    self.search_text.clear();
-                    true
-                }
+                    "Escape" => {
+                        self.focused = false;
+                        self.selection_index = 0;
+                        self.search_text.clear();
+                        true
+                    }
 
-                "ArrowUp" => {
-                    self.focused = true;
-                    let event: &Event = &event;
-                    event.prevent_default();
-                    self.selection_index = self.selection_index.saturating_sub(1);
-                    true
-                }
+                    "ArrowUp" => {
+                        self.focused = true;
+                        let event: &Event = &event;
+                        event.prevent_default();
+                        self.selection_index = self.selection_index.saturating_sub(1);
+                        true
+                    }
 
-                "ArrowDown" => {
-                    self.focused = true;
-                    let event: &Event = &event;
-                    event.prevent_default();
-                    self.selection_index += 1;
-                    true
-                }
+                    "ArrowDown" => {
+                        self.focused = true;
+                        let event: &Event = &event;
+                        event.prevent_default();
+                        self.selection_index += 1;
+                        true
+                    }
 
-                _ => false,
-            },
+                    _ => false,
+                }
+            }
         }
     }
 
@@ -306,7 +328,7 @@ impl<T> Select<T> {
             html! {
                 <div class="control has-icons-right">
                     <input
-                        class="input"
+                        class=classes!("input", if self.props.loading {"is-loading"} else {""})
                         type="text"
                         value=&self.search_text
                         placeholder=self.props.options.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_else(|| self.props.placeholder.clone())
@@ -314,6 +336,8 @@ impl<T> Select<T> {
                         onfocus=self.link.callback(|_| Msg::Focus)
                         onblur=self.link.callback(|_| Msg::Blur)
                         onkeydown=self.link.callback(Msg::KeyPress)
+                        disabled=self.props.disabled
+                        readonly=self.props.readonly
                     />
                     <span class="icon is-small is-right">
                     {
@@ -330,7 +354,7 @@ impl<T> Select<T> {
             html! {
                 <div class="control has-icons-right">
                     <input
-                        class="input"
+                        class=classes!("input", if self.props.loading {"is-loading"} else {""})
                         type="text"
                         value=self.props.options.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_default()
                         oninput=self.link.callback(|data: InputData| {
@@ -343,6 +367,8 @@ impl<T> Select<T> {
                         onblur=self.link.callback(|_| Msg::Blur)
                         onclick=self.link.callback(|_| Msg::Focus)
                         onkeydown=self.link.callback(Msg::KeyPress)
+                        disabled=self.props.disabled
+                        readonly=self.props.readonly
                     />
                     <span class="icon is-small is-right">
                         <i class="fas fa-angle-down" />
@@ -368,7 +394,7 @@ impl<T> Select<T> {
                     }
                 }
                 <input
-                    class="input"
+                    class=classes!("input", if self.props.loading {"is-loading"} else {""})
                     type="text"
                     placeholder="Type to search"
                     value=&self.search_text
@@ -376,6 +402,8 @@ impl<T> Select<T> {
                     onfocus=self.link.callback(|_| Msg::Focus)
                     onblur=self.link.callback(|_| Msg::Blur)
                     onkeydown=self.link.callback(Msg::KeyPress)
+                    disabled=self.props.disabled
+                    readonly=self.props.readonly
                 />
             </div>
         }
