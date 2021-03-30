@@ -1,6 +1,6 @@
 [package]
 name = "yew-bulma-search-select"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Elliott Clarke <elliott.clarke.ext@siemens-energy.com>"]
 edition = "2018"
 

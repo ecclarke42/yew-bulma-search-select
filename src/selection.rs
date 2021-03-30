@@ -43,12 +43,14 @@ impl Selection {
     }
 
     /// Create `SelectOptions` with this mode
-    pub fn with_options<T, I: IntoIterator<Item = T>>(self, options: I) -> crate::SelectOptions<T> {
-        Arc::new(SelectState {
-            options: options.into_iter().map(Arc::new).collect::<Vec<_>>(), // Arc::new(RwLock::new(options)),
-            selected_indices: RwLock::new(self),
-            filtered_indices: RwLock::new(Filtered::All),
-        })
+    pub fn with_options<T, I: IntoIterator<Item = T>>(self, options: I) -> SelectState<T> {
+        SelectState {
+            inner: Arc::new(SelectStateInner {
+                options: options.into_iter().map(Arc::new).collect::<Vec<_>>(), // Arc::new(RwLock::new(options)),
+                selected_indices: RwLock::new(self),
+                filtered_indices: RwLock::new(Filtered::All),
+            }),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -175,8 +177,26 @@ pub enum Filtered {
     All,
 }
 
-/// Primarily used inside an Arc
+/// Internal state is wrapped in an Arc, so cloning this is not very expensive
 pub struct SelectState<T> {
+    inner: Arc<SelectStateInner<T>>,
+}
+
+impl<T> Clone for SelectState<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<T> PartialEq for SelectState<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+pub(crate) struct SelectStateInner<T> {
     pub(crate) options: Vec<Arc<T>>,
     pub(crate) selected_indices: RwLock<Selection>,
     pub(crate) filtered_indices: RwLock<Filtered>,
@@ -184,7 +204,7 @@ pub struct SelectState<T> {
 
 impl<T> SelectState<T> {
     pub fn is_multiple(&self) -> bool {
-        if let Ok(inner) = self.selected_indices.read() {
+        if let Ok(inner) = self.inner.selected_indices.read() {
             inner.is_multiple()
         } else {
             // TODO: handle lock error?
@@ -193,7 +213,7 @@ impl<T> SelectState<T> {
     }
 
     pub fn is_nullable(&self) -> bool {
-        if let Ok(inner) = self.selected_indices.read() {
+        if let Ok(inner) = self.inner.selected_indices.read() {
             inner.is_nullable()
         } else {
             // TODO: handle lock error?
@@ -203,24 +223,24 @@ impl<T> SelectState<T> {
 
     // Expose the internal api of the options vec
     pub fn get(&self, index: usize) -> Option<Arc<T>> {
-        self.options.get(index).cloned()
+        self.inner.options.get(index).cloned()
     }
     pub fn iter(&self) -> std::slice::Iter<Arc<T>> {
-        self.options.iter()
+        self.inner.options.iter()
     }
 
     pub fn first_selected(&self) -> Option<(usize, Arc<T>)> {
-        if let Ok(selected) = self.selected_indices.read() {
+        if let Ok(selected) = self.inner.selected_indices.read() {
             match *selected {
                 Selection::MaybeOne(None) => {}
                 Selection::AlwaysOne(index) | Selection::MaybeOne(Some(index)) => {
-                    if let Some(item) = self.options.get(index) {
+                    if let Some(item) = self.inner.options.get(index) {
                         return Some((index, item.clone()));
                     }
                 }
                 Selection::Multiple(ref set) => {
                     if let Some(&index) = set.iter().next() {
-                        if let Some(item) = self.options.get(index) {
+                        if let Some(item) = self.inner.options.get(index) {
                             return Some((index, item.clone()));
                         }
                     }
@@ -232,11 +252,11 @@ impl<T> SelectState<T> {
     }
 
     pub fn selected_items(&self) -> Vec<(usize, Arc<T>)> {
-        if let Ok(selected) = self.selected_indices.read() {
+        if let Ok(selected) = self.inner.selected_indices.read() {
             match *selected {
                 Selection::MaybeOne(None) => Vec::new(),
                 Selection::AlwaysOne(index) | Selection::MaybeOne(Some(index)) => {
-                    if let Some(item) = self.options.get(index) {
+                    if let Some(item) = self.inner.options.get(index) {
                         vec![(index, item.clone())]
                     } else {
                         Vec::new()
@@ -248,7 +268,7 @@ impl<T> SelectState<T> {
 
                     let mut selected_items = Vec::with_capacity(set.len());
                     for &index in set {
-                        if let Some(item) = self.options.get(index) {
+                        if let Some(item) = self.inner.options.get(index) {
                             selected_items.push((index, item.clone()))
                         }
                     }
@@ -261,16 +281,16 @@ impl<T> SelectState<T> {
     }
 
     pub fn first_filtered(&self) -> Option<(usize, Arc<T>)> {
-        if let Ok(filtered) = self.filtered_indices.read() {
+        if let Ok(filtered) = self.inner.filtered_indices.read() {
             match *filtered {
                 Filtered::All => {
-                    if let Some(item) = self.options.first() {
+                    if let Some(item) = self.inner.options.first() {
                         return Some((0, item.clone()));
                     }
                 }
                 Filtered::Some(ref set) => {
                     if let Some(&index) = set.iter().next() {
-                        if let Some(item) = self.options.get(index) {
+                        if let Some(item) = self.inner.options.get(index) {
                             return Some((index, item.clone()));
                         }
                     }
@@ -284,18 +304,18 @@ impl<T> SelectState<T> {
 
     // Get an option item an it's global index using it's relative position in the filter list
     pub fn get_filtered(&self, position: usize) -> Option<(usize, Arc<T>)> {
-        if let Ok(filtered) = self.filtered_indices.read() {
+        if let Ok(filtered) = self.inner.filtered_indices.read() {
             match *filtered {
                 Filtered::All => {
                     // If no filtering, position is equivalent to index
-                    if let Some(item) = self.options.get(position) {
+                    if let Some(item) = self.inner.options.get(position) {
                         return Some((position, item.clone()));
                     }
                 }
                 Filtered::Some(ref set) => {
                     // If filtered, we need to find the global index of the item at this position
                     if let Some(&index) = set.iter().nth(position) {
-                        if let Some(item) = self.options.get(index) {
+                        if let Some(item) = self.inner.options.get(index) {
                             return Some((index, item.clone()));
                         }
                     }
@@ -308,11 +328,13 @@ impl<T> SelectState<T> {
     }
 
     pub fn filtered_items(&self) -> Vec<(usize, bool, Arc<T>)> {
-        if let (Ok(filtered), Ok(selected)) =
-            (self.filtered_indices.read(), self.selected_indices.read())
-        {
+        if let (Ok(filtered), Ok(selected)) = (
+            self.inner.filtered_indices.read(),
+            self.inner.selected_indices.read(),
+        ) {
             match *filtered {
                 Filtered::All => self
+                    .inner
                     .options
                     .iter()
                     .enumerate()
@@ -324,7 +346,7 @@ impl<T> SelectState<T> {
 
                     let mut filtered_items = Vec::with_capacity(set.len());
                     for &index in set {
-                        if let Some(item) = self.options.get(index) {
+                        if let Some(item) = self.inner.options.get(index) {
                             filtered_items.push((index, selected.includes(&index), item.clone()))
                         }
                     }
@@ -341,11 +363,11 @@ impl<T> SelectState<T> {
     /// Select an index from the options.
     /// Returns true if the selection has changed.
     pub fn select(&self, index: usize) -> bool {
-        if index >= self.options.len() {
+        if index >= self.inner.options.len() {
             return false;
         }
 
-        if let Ok(mut inner) = self.selected_indices.write() {
+        if let Ok(mut inner) = self.inner.selected_indices.write() {
             inner.select(index)
         } else {
             false
@@ -355,11 +377,11 @@ impl<T> SelectState<T> {
     /// Deselect an index from the options.
     /// Returns true if the selection has changed.
     pub fn deselect(&self, index: usize) -> bool {
-        if index >= self.options.len() {
+        if index >= self.inner.options.len() {
             return false;
         }
 
-        if let Ok(mut inner) = self.selected_indices.write() {
+        if let Ok(mut inner) = self.inner.selected_indices.write() {
             inner.deselect(index)
         } else {
             false
@@ -369,7 +391,7 @@ impl<T> SelectState<T> {
     /// Clear the selected items.
     /// Returns true if the selection has changed.
     pub fn clear(&self) -> bool {
-        if let Ok(mut inner) = self.selected_indices.write() {
+        if let Ok(mut inner) = self.inner.selected_indices.write() {
             inner.clear()
         } else {
             false
@@ -377,8 +399,9 @@ impl<T> SelectState<T> {
     }
 
     pub async fn filter<F: Fn(&T) -> bool>(&self, filter_fn: F) {
-        if let Ok(mut inner) = self.filtered_indices.write() {
+        if let Ok(mut inner) = self.inner.filtered_indices.write() {
             let indices = self
+                .inner
                 .options
                 .iter()
                 .enumerate()
@@ -400,7 +423,7 @@ impl<T> SelectState<T> {
     }
 
     pub async fn unfilter(&self) {
-        if let Ok(mut inner) = self.filtered_indices.write() {
+        if let Ok(mut inner) = self.inner.filtered_indices.write() {
             *inner = Filtered::All;
         }
     }

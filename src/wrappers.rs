@@ -1,15 +1,22 @@
 use std::sync::Arc;
 
-type SelectFilterContainer<T> = Arc<dyn Fn(&T, &str) -> bool>;
+// Use the Box to make sure we're not doing a Arc::ptr_eq on dyn objects (since rust doesn't like that)
+type SelectFilterContainer<T> = Box<dyn Fn(&T, &str) -> bool>;
 
 pub struct SelectFilter<T> {
-    inner: SelectFilterContainer<T>,
+    inner: Arc<SelectFilterContainer<T>>,
+}
+
+impl<T> PartialEq for SelectFilter<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
 }
 
 impl<T> SelectFilter<T> {
     pub fn new<F: Fn(&T, &str) -> bool + 'static>(f: F) -> Self {
         Self {
-            inner: Arc::new(f) as SelectFilterContainer<T>,
+            inner: Arc::new(Box::new(f) as SelectFilterContainer<T>),
         }
     }
 
@@ -27,16 +34,22 @@ impl<T> Clone for SelectFilter<T> {
     }
 }
 
-type SelectDisplayContainer<T> = Arc<dyn Fn(&T) -> String>;
+type SelectDisplayContainer<T> = Box<dyn Fn(&T) -> String>;
 
 pub struct SelectDisplay<T> {
-    inner: SelectDisplayContainer<T>,
+    inner: Arc<SelectDisplayContainer<T>>,
+}
+
+impl<T> PartialEq for SelectDisplay<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
 }
 
 impl<T> SelectDisplay<T> {
     pub fn new<F: Fn(&T) -> String + 'static>(f: F) -> Self {
         Self {
-            inner: Arc::new(f) as SelectDisplayContainer<T>,
+            inner: Arc::new(Box::new(f) as SelectDisplayContainer<T>),
         }
     }
 

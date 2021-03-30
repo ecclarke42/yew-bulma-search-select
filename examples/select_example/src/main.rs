@@ -1,6 +1,6 @@
 use yew::prelude::*;
 
-use yew_bulma_search_select::{Select, SelectDisplay, SelectFilter, SelectOptions, Selection};
+use yew_bulma_search_select::{Select, SelectDisplay, SelectFilter, SelectState, Selection};
 
 fn main() {
     yew::start_app::<App>();
@@ -26,9 +26,9 @@ pub struct App {
     filter: SelectFilter<Data>,
     select_display: SelectDisplay<Data>,
 
-    a_data: SelectOptions<Data>,
-    b_data: SelectOptions<Data>,
-    c_data: SelectOptions<Data>,
+    a_data: SelectState<Data>,
+    b_data: SelectState<Data>,
+    c_data: SelectState<Data>,
 }
 
 pub enum Msg {
@@ -113,7 +113,7 @@ impl Component for App {
                     <label class="label">{"Select Single, Non-Nullable Field"}</label>
                     <div class="control">
                         <Select<Data>
-                            options=self.a_data.clone()
+                            state=self.a_data.clone()
                             filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedA)
@@ -124,7 +124,7 @@ impl Component for App {
                     <label class="label">{"Select Single, Nullable Field"}</label>
                     <div class="control">
                         <Select<Data>
-                            options=self.b_data.clone()
+                            state=self.b_data.clone()
                             filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedB)
@@ -135,7 +135,7 @@ impl Component for App {
                     <label class="label">{"Select Multiple Fields"}</label>
                     <div class="control">
                         <Select<Data>
-                            options=self.c_data.clone()
+                            state=self.c_data.clone()
                             filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedC)
@@ -148,7 +148,7 @@ impl Component for App {
                     <div class="control">
                         <Select<Data>
                             omit_selected={true}
-                            options=self.c_data.clone()
+                            state=self.c_data.clone()
                             filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedC)

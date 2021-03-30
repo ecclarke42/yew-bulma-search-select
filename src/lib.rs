@@ -1,13 +1,10 @@
-use std::sync::Arc;
 use yew::prelude::*;
 use yewtil::future::LinkFuture;
 
 mod selection;
-pub use selection::Selection;
+pub use selection::{SelectState, Selection};
 mod wrappers;
 pub use wrappers::{SelectDisplay, SelectFilter};
-
-pub type SelectOptions<T> = Arc<selection::SelectState<T>>;
 
 /// Bulma-based selection box
 /// TODO: document
@@ -35,7 +32,7 @@ pub struct SelectProps<T> {
     #[prop_or(true)]
     pub display_selected: bool,
 
-    pub options: SelectOptions<T>,
+    pub state: SelectState<T>,
     pub filter: SelectFilter<T>,
     pub display: SelectDisplay<T>,
 
@@ -61,7 +58,7 @@ impl<T> Clone for SelectProps<T> {
             omit_selected: self.omit_selected,
             display_selected: self.display_selected,
 
-            options: self.options.clone(),
+            state: self.state.clone(),
             filter: self.filter.clone(),
             display: self.display.clone(),
 
@@ -79,7 +76,7 @@ impl<T> Clone for SelectProps<T> {
 impl<T> PartialEq for SelectProps<T> {
     fn eq(&self, other: &Self) -> bool {
         self.readonly == other.readonly && self.disabled == other.disabled && self.loading == other.loading &&
-        Arc::ptr_eq(&self.options, &other.options)
+            self.state == other.state
             // && Arc::ptr_eq(&self.filter, &other.filter) // TODO: don't ignore filter changes?
             && self.omit_selected == other.omit_selected
             && self.placeholder == other.placeholder
@@ -147,7 +144,7 @@ impl<T: 'static> Component for Select<T> {
                 self.search_text = input.clone();
 
                 let filter = self.props.filter.clone();
-                let options = self.props.options.clone();
+                let options = self.props.state.clone();
                 self.link.send_future(async move {
                     if input.is_empty() {
                         options.unfilter().await;
@@ -160,7 +157,7 @@ impl<T: 'static> Component for Select<T> {
             }
 
             Msg::ClearSearch => {
-                let options = self.props.options.clone();
+                let options = self.props.state.clone();
                 self.link.send_future(async move {
                     options.unfilter().await;
                     Msg::Filtered
@@ -212,7 +209,7 @@ impl<T: 'static> Component for Select<T> {
                 match event.code().as_ref() {
                     "Enter" => {
                         if let Some((index, _)) =
-                            self.props.options.get_filtered(self.selection_index)
+                            self.props.state.get_filtered(self.selection_index)
                         {
                             self.link.send_message(Msg::Selected(index));
                         }
@@ -251,13 +248,13 @@ impl<T: 'static> Component for Select<T> {
     fn view(&self) -> Html {
         let options = if self.props.omit_selected {
             self.props
-                .options
+                .state
                 .filtered_items()
                 .into_iter()
                 .filter(|(_, selected, _)| !selected)
                 .collect::<Vec<_>>()
         } else {
-            self.props.options.filtered_items()
+            self.props.state.filtered_items()
         };
 
         let options = if options.is_empty() {
@@ -305,7 +302,7 @@ impl<T: 'static> Component for Select<T> {
             <div class=classes!("dropdown", if self.focused {"is-active"} else {""})>
                 <div class="dropdown-trigger">
                 {
-                    if self.props.options.is_multiple() {
+                    if self.props.state.is_multiple() {
                         self.view_multiple()
                     } else {
                         self.view_single()
@@ -331,7 +328,7 @@ impl<T> Select<T> {
                         class=classes!("input", if self.props.loading {"is-loading"} else {""})
                         type="text"
                         value=&self.search_text
-                        placeholder=self.props.options.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_else(|| self.props.placeholder.clone())
+                        placeholder=self.props.state.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_else(|| self.props.placeholder.clone())
                         oninput=self.link.callback(|event: InputData| Msg::Input(event.value))
                         onfocus=self.link.callback(|_| Msg::Focus)
                         onblur=self.link.callback(|_| Msg::Blur)
@@ -356,7 +353,7 @@ impl<T> Select<T> {
                     <input
                         class=classes!("input", if self.props.loading {"is-loading"} else {""})
                         type="text"
-                        value=self.props.options.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_default()
+                        value=self.props.state.selected_items().first().map(|(_, x)| self.props.display.call(x)).unwrap_or_default()
                         oninput=self.link.callback(|data: InputData| {
                             // Don't allow input when not focused
                             let event: &Event = &data.event;
@@ -383,7 +380,7 @@ impl<T> Select<T> {
             <div class=classes!("input", "ybss-multiple-input-wrapper", if self.focused {"is-active"} else {""})>
                 {
                     if self.props.display_selected {
-                        self.props.options.selected_items().into_iter().map(|(i, item)| html! {
+                        self.props.state.selected_items().into_iter().map(|(i, item)| html! {
                             <span class="tag">
                                 { self.props.display.call(&item) }
                                 <div class="delete is-small" onclick=self.link.callback(move |_| Msg::Removed(i)) />
