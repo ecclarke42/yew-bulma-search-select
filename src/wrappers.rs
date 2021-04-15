@@ -26,6 +26,12 @@ impl<T> SelectFilter<T> {
     }
 }
 
+impl<T, F: Fn(&T, &str) -> bool + 'static> From<F> for SelectFilter<T> {
+    fn from(f: F) -> Self {
+        SelectFilter::new(f)
+    }
+}
+
 impl<T> Clone for SelectFilter<T> {
     fn clone(&self) -> Self {
         Self {
@@ -56,6 +62,12 @@ impl<T> SelectDisplay<T> {
     // TODO: impl Fn when traits stabilize?
     pub fn call(&self, item: &T) -> String {
         (self.inner)(item)
+    }
+}
+
+impl<T, F: Fn(&T) -> String + 'static> From<F> for SelectDisplay<T> {
+    fn from(f: F) -> Self {
+        SelectDisplay::new(f)
     }
 }
 

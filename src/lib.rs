@@ -1,8 +1,10 @@
 use yew::prelude::*;
 use yewtil::future::LinkFuture;
 
+mod state;
+pub use state::SelectState;
 mod selection;
-pub use selection::{SelectState, Selection};
+pub use selection::Selection;
 mod wrappers;
 pub use wrappers::{SelectDisplay, SelectFilter};
 
@@ -33,7 +35,6 @@ pub struct SelectProps<T> {
     pub display_selected: bool,
 
     pub state: SelectState<T>,
-    pub filter: SelectFilter<T>,
     pub display: SelectDisplay<T>,
 
     #[prop_or_default]
@@ -59,7 +60,6 @@ impl<T> Clone for SelectProps<T> {
             display_selected: self.display_selected,
 
             state: self.state.clone(),
-            filter: self.filter.clone(),
             display: self.display.clone(),
 
             onselected: self.onselected.clone(),
@@ -143,13 +143,12 @@ impl<T: 'static> Component for Select<T> {
                 self.focused = true;
                 self.search_text = input.clone();
 
-                let filter = self.props.filter.clone();
-                let options = self.props.state.clone();
+                let state = self.props.state.clone();
                 self.link.send_future(async move {
                     if input.is_empty() {
-                        options.unfilter().await;
+                        state.unfilter().await;
                     } else {
-                        options.filter(|item| filter.call(item, &input)).await;
+                        state.filter(&input).await;
                     }
                     Msg::Filtered
                 });

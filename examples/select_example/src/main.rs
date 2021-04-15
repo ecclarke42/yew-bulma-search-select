@@ -23,7 +23,6 @@ impl std::fmt::Display for Data {
 pub struct App {
     link: ComponentLink<Self>,
 
-    filter: SelectFilter<Data>,
     select_display: SelectDisplay<Data>,
 
     a_data: SelectState<Data>,
@@ -74,18 +73,19 @@ impl Component for App {
             },
         ];
 
+        let filter = SelectFilter::new(|item: &Data, search: &str| -> bool {
+            item.name
+                .to_lowercase()
+                .find(&search.to_lowercase())
+                .is_some()
+        });
+
         Self {
             link,
-            filter: SelectFilter::new(|item: &Data, search: &str| -> bool {
-                item.name
-                    .to_lowercase()
-                    .find(&search.to_lowercase())
-                    .is_some()
-            }),
             select_display: SelectDisplay::new(|item: &Data| item.to_string()),
-            a_data: Selection::one(0).with_options(test_data.clone()),
-            b_data: Selection::none().with_options(test_data.clone()),
-            c_data: Selection::empty().with_options(test_data),
+            a_data: SelectState::new(test_data.clone(), Selection::one(0), filter.clone()),
+            b_data: SelectState::new(test_data.clone(), Selection::none(), filter.clone()),
+            c_data: SelectState::new(test_data, Selection::empty(), filter),
         }
     }
 
@@ -114,7 +114,6 @@ impl Component for App {
                     <div class="control">
                         <Select<Data>
                             state=self.a_data.clone()
-                            filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedA)
                         />
@@ -125,7 +124,6 @@ impl Component for App {
                     <div class="control">
                         <Select<Data>
                             state=self.b_data.clone()
-                            filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedB)
                         />
@@ -136,7 +134,6 @@ impl Component for App {
                     <div class="control">
                         <Select<Data>
                             state=self.c_data.clone()
-                            filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedC)
                             onremoved=self.link.callback(Msg::ClearedC)
@@ -149,7 +146,6 @@ impl Component for App {
                         <Select<Data>
                             omit_selected={true}
                             state=self.c_data.clone()
-                            filter=self.filter.clone()
                             display=self.select_display.clone()
                             onselected=self.link.callback(Msg::SelectedC)
                             onremoved=self.link.callback(Msg::ClearedC)
